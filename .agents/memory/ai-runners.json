@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "setup_note": "Replace command/args with Codex, Claude, another CLI, a local model command, or an API wrapper before enabling workflows.",
+  "default_role_runners": {
+    "coordinator": "coordinator",
+    "reviewer": "reviewer",
+    "implementer": "implementer"
+  },
+  "runners": [
+    {
+      "id": "coordinator",
+      "kind": "cli",
+      "provider": "replaceable",
+      "model": "replaceable-planning-model",
+      "command": "replace-with-coordinator-ai-command",
+      "args": [
+        "{prompt}"
+      ],
+      "uses_doppler": true,
+      "healthcheck": {
+        "command": "replace-with-coordinator-ai-command",
+        "args": [
+          "respond with the word OK and nothing else"
+        ],
+        "expect_stdout": "OK"
+      }
+    },
+    {
+      "id": "reviewer",
+      "kind": "cli",
+      "provider": "replaceable",
+      "model": "replaceable-review-model",
+      "command": "replace-with-reviewer-ai-command",
+      "args": [
+        "{prompt}"
+      ],
+      "uses_doppler": true,
+      "healthcheck": {
+        "command": "replace-with-reviewer-ai-command",
+        "args": [
+          "respond with the word OK and nothing else"
+        ],
+        "expect_stdout": "OK"
+      }
+    },
+    {
+      "id": "implementer",
+      "kind": "cli",
+      "provider": "replaceable",
+      "model": "replaceable-code-model",
+      "command": "replace-with-implementer-ai-command",
+      "args": [
+        "{prompt}"
+      ],
+      "uses_doppler": true,
+      "healthcheck": {
+        "command": "replace-with-implementer-ai-command",
+        "args": [
+          "respond with the word OK and nothing else"
+        ],
+        "expect_stdout": "OK"
+      }
+    }
+  ]
+}
