@@ -1,0 +1,133 @@
+name: Triager
+
+on:
+  issues:
+    types: [opened, labeled]
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  triage:
+    if: ${{ github.event.action == 'opened' || contains(fromJSON('["feature","bug","chore","docs","question","proposal"]'), github.event.label.name) }}
+    runs-on: [self-hosted, "project-medhus-website"]
+    concurrency:
+      group: triager-${{ github.event.issue.number }}
+      cancel-in-progress: false
+    steps:
+      - name: Checkout trusted base
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 1
+
+      - name: Tag gate
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ github.event.issue.number }}
+        run: |
+          TAG_LABELS="feature bug chore docs question proposal"
+          ISSUE_LABELS=$(gh issue view "$ISSUE" --json labels --jq '.labels[].name' | tr '\n' ' ')
+          HAS_TAG=false
+          for tag in $TAG_LABELS; do
+            if echo " $ISSUE_LABELS " | grep -q " $tag "; then
+              echo "type_tag=$tag" >> "$GITHUB_OUTPUT"
+              HAS_TAG=true
+              break
+            fi
+          done
+          if [ "$HAS_TAG" = "true" ]; then
+            echo "has_tag=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_tag=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Request type tag
+        if: steps.gate.outputs.has_tag == 'false' && github.event.action == 'opened'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ github.event.issue.number }}
+        run: |
+          ALREADY=$(gh issue view "$ISSUE" --json labels --jq '.labels[].name' | grep -c '^needs-tag$' || true)
+          if [ "$ALREADY" = "0" ]; then
+            gh issue comment "$ISSUE" --body "This issue needs a type tag before agents will act. Please apply exactly one of: \`feature\`, \`bug\`, \`chore\`, \`docs\`, \`question\`, \`proposal\`."
+            gh issue edit "$ISSUE" --add-label "needs-tag"
+          fi
+
+      - name: Health check
+        if: steps.gate.outputs.has_tag == 'true'
+        run: ./.github/scripts/auth-check.sh --runner coordinator
+
+      - name: Budget check
+        if: steps.gate.outputs.has_tag == 'true'
+        run: ./.github/scripts/budget-check.sh --issue "${{ github.event.issue.number }}" --workflow triager --runner coordinator
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Capture run start
+        if: steps.gate.outputs.has_tag == 'true'
+        id: run_context
+        run: echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch issue context
+        if: steps.gate.outputs.has_tag == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue view "${{ github.event.issue.number }}" --json title,body,labels,author,createdAt > "$RUNNER_TEMP/issue.json"
+
+      - name: Triage pass
+        if: steps.gate.outputs.has_tag == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > "$RUNNER_TEMP/triager-prompt.txt" <<PROMPT
+          You are the Triager. Read .agents/roles/triager.md and follow it exactly.
+          Read .agents/memory/project-scope.md for the in-scope / out-of-scope declaration.
+          Read .agents/memory/conventions.md for project rules.
+
+          Issue context is at $RUNNER_TEMP/issue.json (title, body, labels, author, createdAt).
+          Issue number: ${{ github.event.issue.number }}
+          Type tag applied by human: ${{ steps.gate.outputs.type_tag }}
+
+          Procedure:
+            1. If project-scope.md is missing or empty, default verdict to 'ambiguous'
+               and ask the human to fill scope before any other action.
+            2. Otherwise compare the issue against In scope / Out of scope / Adjacent
+               sections and produce a verdict: in-scope, out-of-scope, or ambiguous.
+            3. Choose exactly one recommendation: plan-it, close-out-of-scope,
+               refer-elsewhere:<target>, defer-needs-roadmap, convert-to-question,
+               needs-more-info. If type tag is question or proposal, never recommend
+               plan-it; suggest convert-to-question or defer respectively.
+            4. Post exactly one comment in the exact structured format defined in
+               .agents/roles/triager.md (### Triage block, under 200 words).
+            5. Apply exactly one state label corresponding to the verdict:
+                 in-scope    -> ready-to-plan
+                 out-of-scope -> out-of-scope-recommended
+                 ambiguous   -> needs-scope-decision
+               Use gh issue edit --add-label, and remove the needs-tag label if present.
+
+          Hard rules:
+            - Never close the issue.
+            - Never add a type tag.
+            - Never propose implementation details.
+          PROMPT
+          ./.github/scripts/ai-run.sh --runner coordinator --prompt-file "$RUNNER_TEMP/triager-prompt.txt"
+
+      - name: Record successful triage budget
+        if: success() && steps.gate.outputs.has_tag == 'true'
+        run: ./.github/scripts/budget-record.sh --issue "${{ github.event.issue.number }}" --workflow triager --runner coordinator --result success --started-at "${{ steps.run_context.outputs.started_at }}"
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+
+      - name: Failure handling
+        if: failure() && steps.gate.outputs.has_tag == 'true'
+        run: |
+          gh issue comment "${{ github.event.issue.number }}" --body "Triager workflow failed; see Actions logs."
+          gh issue edit "${{ github.event.issue.number }}" --add-label "blocked"
+          ./.github/scripts/budget-record.sh --issue "${{ github.event.issue.number }}" --workflow triager --runner coordinator --result failure --started-at "${{ steps.run_context.outputs.started_at }}" || true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_ACTOR: ${{ github.actor }}

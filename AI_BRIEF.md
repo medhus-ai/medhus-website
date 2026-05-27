@@ -12,7 +12,9 @@ Project brief for this repo.
 
 This repo uses embedded engineering automation.
 
-- Default roles: Coordinator, Reviewer
+- Always-present roles: triager, coordinator, planner, reviewer, qa-engineer, engineer
+- Specialists installed on demand: frontend-engineer, ml-engineer, container-engineer, security-engineer, or any cloned from the specialist-engineer template
+- Required type tag on every issue: feature / bug / chore / docs / question / proposal
 - Machine secrets and keys: Doppler
 - Human approvals: GitHub comments, labels, PR review, and merges
 - No agent merges to main
@@ -22,5 +24,7 @@ This repo uses embedded engineering automation.
 - .agents/memory/ai-runners.json
 - .agents/memory/roles.md
 - .agents/memory/conventions.md
+- .agents/memory/project-scope.md
+- .agents/roles/triager.md
 - .agents/roles/coordinator.md
 - .agents/roles/reviewer.md

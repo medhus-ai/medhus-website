@@ -49,7 +49,7 @@ function requestInstallationToken(jwt, installationId) {
       headers: {
         Authorization: `Bearer ${jwt}`,
         Accept: "application/vnd.github+json",
-        "User-Agent": "engineering-automation"
+        "User-Agent": "gitcrew"
       }
     }, (res) => {
       let body = "";

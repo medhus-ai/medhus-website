@@ -3,7 +3,7 @@ const { readFileSync } = require("node:fs");
 const { execFileSync } = require("node:child_process");
 
 const args = parseArgs(process.argv.slice(2));
-const activeLabels = String(args["active-labels"] || "triage-needed,needs-design,design-ready,ready-for-impl,in-progress,ready-for-review,human-review-needed,blocked,rate-limited,cost-cap-hit,done").split(",");
+const activeLabels = String(args["active-labels"] || "needs-tag,triage-running,out-of-scope-recommended,needs-scope-decision,ready-to-plan,plan-drafting,plan-needs-clarify,plan-files-committed,plan-review-running,plan-needs-revision,plan-human-review,plan-approved,building,build-coordinating,code-review-requested,code-review-passed,human-test,human-review-needed,blocked,rate-limited,cost-cap-hit,done").split(",");
 const target = args.issue || args.pr;
 
 if (!target || !args["expect-label"] || !args.actor || !args.allowlist) {

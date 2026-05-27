@@ -2,25 +2,75 @@
 
 ```yaml
 roles:
+  - name: triager
+    type: default
+    runner_id: coordinator
+    model: configured-by-runner
+    system_prompt_path: .agents/roles/triager.md
+    workflow_path: .github/workflows/triager.yml.disabled
+    commit_identity:
+      name: "Triager (AI)"
+      email: "triager@bot.local"
+    triggers:
+      - issues:opened
+      - issues:labeled
+    active_state_labels:
+      - triage-running
+      - out-of-scope-recommended
+      - needs-scope-decision
+      - ready-to-plan
+    writes:
+      - issue labels
+      - issue comments
+    escalation_labels:
+      - human-review-needed
+      - blocked
+
   - name: coordinator
     type: default
     runner_id: coordinator
     model: configured-by-runner
     system_prompt_path: .agents/roles/coordinator.md
-    workflow_path: .github/workflows/coordinator-triage.yml
+    workflow_path: not-yet-generated
     commit_identity:
       name: "Coordinator (AI)"
       email: "coordinator@bot.local"
     triggers:
-      - issues:opened
+      - label transitions
       - issue_comment:created
       - schedule:daily
     active_state_labels:
-      - triage-needed
+      - plan-review-running
+      - build-coordinating
     writes:
       - issue labels
       - issue comments
       - .agents/log/YYYY-MM-DD.md
+    escalation_labels:
+      - human-review-needed
+      - blocked
+
+  - name: planner
+    type: default
+    runner_id: coordinator
+    model: configured-by-runner
+    system_prompt_path: .agents/roles/planner.md
+    workflow_path: not-yet-generated
+    commit_identity:
+      name: "Planner (AI)"
+      email: "planner@bot.local"
+    triggers:
+      - cli: gitcrew plan start/continue
+      - cockpit: planner UI session
+      - issues:labeled:ready-to-plan (Phase E)
+    active_state_labels:
+      - plan-drafting
+      - plan-needs-clarify
+      - plan-files-committed
+      - plan-needs-revision
+    writes:
+      - .agents/plans/<issue-id>/*.md
+      - issue comments (questions, status)
     escalation_labels:
       - human-review-needed
       - blocked
@@ -39,7 +89,7 @@ roles:
       - pull_request:synchronize
       - pull_request:ready_for_review
     active_state_labels:
-      - ready-for-review
+      - code-review-requested
     writes:
       - PR reviews
       - PR comments
@@ -49,4 +99,70 @@ roles:
       - human-review-needed
       - blocked
 
+  - name: qa-engineer
+    type: default
+    runner_id: reviewer
+    model: configured-by-runner
+    system_prompt_path: .agents/roles/qa-engineer.md
+    workflow_path: not-yet-generated
+    commit_identity:
+      name: "QA Engineer (AI)"
+      email: "qa-engineer@bot.local"
+    triggers:
+      - pull_request:labeled:code-review-passed (Phase E)
+    active_state_labels:
+      - human-test
+    writes:
+      - PR comments with test results
+      - new test files
+      - new issues for out-of-scope bugs found
+    escalation_labels:
+      - human-review-needed
+      - blocked
+
+  - name: engineer
+    type: default
+    runner_id: engineer
+    model: configured-by-runner
+    system_prompt_path: .agents/roles/engineer.md
+    workflow_path: not-yet-generated
+    commit_identity:
+      name: "Engineer (AI)"
+      email: "engineer@bot.local"
+    triggers:
+      - tasks.md row with engineer: engineer (default fallback) reaches building (Phase F)
+      - direct-chat invocation via gitcrew chat engineer
+    active_state_labels:
+      - building
+    writes:
+      - feature branches
+      - commits (prefix [role:engineer])
+      - pull requests
+    escalation_labels:
+      - human-review-needed
+      - blocked
+
+  - name: frontend-engineer
+    type: specialist
+    runner_id: engineer
+    model: configured-by-runner
+    system_prompt_path: .agents/roles/frontend-engineer.md
+    workflow_path: not-yet-generated
+    commit_identity:
+      name: "Frontend Engineer (AI)"
+      email: "frontend-engineer@bot.local"
+    triggers:
+      - tasks.md row with engineer: frontend-engineer (Phase F)
+      - plan-review-running (Phase E)
+      - direct-chat via gitcrew chat frontend-engineer
+    active_state_labels:
+      - building
+      - plan-review-running
+    writes:
+      - feature branches
+      - PR review comments
+      - plan-review scorecard comments
+    escalation_labels:
+      - human-review-needed
+      - blocked
 ```

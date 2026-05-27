@@ -1,0 +1,85 @@
+name: Engineer
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: Issue number
+        required: true
+      task:
+        description: Task id from .agents/plans/<issue>/tasks.md
+        required: true
+      engineer:
+        description: Engineer role slug (default engineer)
+        required: false
+        default: engineer
+
+permissions:
+  issues: write
+  pull-requests: write
+  contents: write
+
+jobs:
+  build:
+    runs-on: [self-hosted, "project-medhus-website"]
+    concurrency:
+      group: engineer-${{ github.event.inputs.issue }}-${{ github.event.inputs.task }}
+      cancel-in-progress: false
+    steps:
+      - name: Checkout trusted base
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+
+      - name: Health check
+        run: ./.github/scripts/auth-check.sh --runner engineer
+
+      - name: Budget check
+        run: ./.github/scripts/budget-check.sh --issue "${{ github.event.inputs.issue }}" --workflow engineer --runner engineer
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Capture run start
+        id: run_context
+        run: echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Build the task on a feature branch and open a PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ISSUE="${{ github.event.inputs.issue }}"
+          TASK="${{ github.event.inputs.task }}"
+          ROLE="${{ github.event.inputs.engineer }}"
+          BRANCH="${ROLE}/issue-${ISSUE}-${TASK}"
+          git config user.name "${ROLE} (AI)"
+          git config user.email "${ROLE}@bot.local"
+          git checkout -b "$BRANCH"
+          cat > "$RUNNER_TEMP/engineer-prompt.txt" <<PROMPT
+          You are the ${ROLE}. Read .agents/roles/${ROLE}.md and follow it exactly.
+          Implement task ${TASK} from .agents/plans/${ISSUE}/tasks.md.
+          Read the plan files in .agents/plans/${ISSUE}/ and .agents/memory/conventions.md.
+          Stay inside the task's files_likely_touched. Add the tests tests.md requires.
+          Commit with prefix [role:${ROLE}]. Do not merge. Do not push to main.
+          PROMPT
+          ./.github/scripts/ai-run.sh --runner engineer --prompt-file "$RUNNER_TEMP/engineer-prompt.txt"
+          git push origin "$BRANCH"
+          gh pr create --title "[${TASK}] ${ROLE} for issue #${ISSUE}" \
+            --body "Implements task ${TASK} of issue #${ISSUE}. See .agents/plans/${ISSUE}/tasks.md." \
+            --label "task:${TASK}" --label "issue:${ISSUE}" --label "code-review-requested" || true
+
+      - name: Record success
+        if: success()
+        run: ./.github/scripts/budget-record.sh --issue "${{ github.event.inputs.issue }}" --workflow engineer --runner engineer --result success --started-at "${{ steps.run_context.outputs.started_at }}"
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+
+      - name: Failure handling
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_ACTOR: ${{ github.actor }}
+        run: |
+          gh issue comment "${{ github.event.inputs.issue }}" --body "Engineer workflow for task ${{ github.event.inputs.task }} failed; see Actions logs."
+          gh issue edit "${{ github.event.inputs.issue }}" --add-label "blocked"
+          ./.github/scripts/budget-record.sh --issue "${{ github.event.inputs.issue }}" --workflow engineer --runner engineer --result failure --started-at "${{ steps.run_context.outputs.started_at }}" || true

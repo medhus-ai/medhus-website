@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 const { mkdirSync, readFileSync, writeFileSync, existsSync } = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 
 const args = parseArgs(process.argv.slice(2));
@@ -9,15 +10,14 @@ const timestamp = now.toISOString();
 const startedAt = args["started-at"] ? new Date(args["started-at"]) : now;
 const startedAtMs = Number.isNaN(startedAt.getTime()) ? now.getTime() : startedAt.getTime();
 const durationSeconds = Math.max(0, Math.round((now.getTime() - startedAtMs) / 1000));
-const budgetDir = path.join(process.cwd(), ".agents", "budget");
-const budgetPath = path.join(budgetDir, `${month}.json`);
+const budgetPath = resolveBudgetPath(month, { create: true });
 
 if (!args.workflow || !args.result) {
   console.error("usage: budget-record.sh --workflow NAME --result RESULT [--issue N|--pr N|--scope repo] [--runner ID] [--provider NAME] [--started-at ISO]");
   process.exit(2);
 }
 
-mkdirSync(budgetDir, { recursive: true });
+mkdirSync(path.dirname(budgetPath), { recursive: true });
 
 const budget = existsSync(budgetPath)
   ? JSON.parse(readFileSync(budgetPath, "utf8"))
@@ -30,6 +30,7 @@ budget.runs = Array.isArray(budget.runs) ? budget.runs : [];
 budget.runs.push({
   timestamp,
   workflow: String(args.workflow),
+  repository: process.env.GITHUB_REPOSITORY || path.basename(process.cwd()),
   runner_id: args.runner ? String(args.runner) : null,
   provider: args.provider ? String(args.provider) : null,
   issue_or_pr: target,
@@ -57,9 +58,17 @@ function retryCountForTarget(budget, target) {
     .reduce((max, run) => Math.max(max, Number(run.retry_count_after_run || 0)), 0);
 }
 
+function resolveBudgetPath(value) {
+  const globalDir = process.env.GITCREW_BUDGET_DIR
+    ? path.resolve(process.env.GITCREW_BUDGET_DIR)
+    : path.join(os.homedir(), ".gitcrew", "budget");
+  return path.join(globalDir, `${value}.json`);
+}
+
 function defaultBudget(value) {
   return {
     month: value,
+    scope: "global-runner",
     timezone: "UTC",
     daily_run_cap: 25,
     daily_agent_minutes_cap: 180,

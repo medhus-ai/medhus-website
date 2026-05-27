@@ -14,7 +14,7 @@ const actor = event.comment?.user?.login;
 const body = String(event.comment?.body || "");
 const command = body.trim().split(/\s+/)[0];
 const allowed = new Set(["/approve", "/retry", "/test", "/retest", "/escalate", "/cancel", "/cost"]);
-const ACTIVE_LABELS = new Set(["triage-needed", "needs-design", "design-ready", "ready-for-impl", "in-progress", "ready-for-review", "human-review-needed", "blocked", "rate-limited", "cost-cap-hit", "done"]);
+const ACTIVE_LABELS = new Set(["needs-tag", "triage-running", "out-of-scope-recommended", "needs-scope-decision", "ready-to-plan", "plan-drafting", "plan-needs-clarify", "plan-files-committed", "plan-review-running", "plan-needs-revision", "plan-human-review", "plan-approved", "building", "build-coordinating", "code-review-requested", "code-review-passed", "human-test", "human-review-needed", "blocked", "rate-limited", "cost-cap-hit", "done"]);
 const allowlistPath = process.env.ENGINEERING_AUTOMATION_ALLOWLIST || ".github/slash-allowlist.txt";
 
 if (!issueNumber || !actor || !command.startsWith("/")) {
@@ -33,8 +33,8 @@ if (!allowed.has(command)) {
 
 switch (command) {
   case "/approve":
-    guard(issueNumber, "design-ready");
-    gh("issue", "edit", issueNumber, "--remove-label", "design-ready", "--add-label", "ready-for-impl");
+    guard(issueNumber, "plan-human-review");
+    gh("issue", "edit", issueNumber, "--remove-label", "plan-human-review", "--add-label", "plan-approved");
     break;
   case "/retry":
     retry(issueNumber);

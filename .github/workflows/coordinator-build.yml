@@ -1,0 +1,44 @@
+name: Build Coordinator
+
+on:
+  issues:
+    types: [labeled]
+  pull_request:
+    types: [closed, opened, synchronize]
+
+permissions:
+  issues: write
+  pull-requests: write
+  contents: read
+
+jobs:
+  coordinate:
+    if: ${{ (github.event_name == 'issues' && github.event.label.name == 'plan-approved') || github.event_name == 'pull_request' }}
+    runs-on: [self-hosted, "project-medhus-website"]
+    concurrency:
+      group: build-coordinator-${{ github.event.issue.number || github.event.pull_request.number }}
+      cancel-in-progress: false
+    steps:
+      - name: Checkout trusted base
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 1
+
+      - name: Resolve issue number
+        id: resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ github.event_name }}" = "issues" ]; then
+            echo "issue=${{ github.event.issue.number }}" >> "$GITHUB_OUTPUT"
+          else
+            ISSUE=$(gh pr view "${{ github.event.pull_request.number }}" --json labels --jq '.labels[].name' | sed -n 's/^issue:\([0-9][0-9]*\)$/\1/p' | head -n1)
+            echo "issue=$ISSUE" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Coordinate build
+        if: steps.resolve.outputs.issue != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node ./.github/scripts/build-coordinator.js --issue "${{ steps.resolve.outputs.issue }}"

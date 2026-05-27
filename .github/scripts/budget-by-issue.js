@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 const { readFileSync, existsSync } = require("node:fs");
 const { execFileSync } = require("node:child_process");
+const os = require("node:os");
 const path = require("node:path");
 
 const target = process.argv[2];
@@ -10,7 +11,7 @@ if (!target) {
 }
 
 const month = new Date().toISOString().slice(0, 7);
-const budgetPath = path.join(process.cwd(), ".agents", "budget", `${month}.json`);
+const budgetPath = resolveBudgetPath(month);
 if (!existsSync(budgetPath)) {
   console.error("budget file missing: " + budgetPath);
   process.exit(1);
@@ -44,4 +45,11 @@ if (process.env.GH_TOKEN) {
   }
 } else {
   console.log(body);
+}
+
+function resolveBudgetPath(value) {
+  const globalDir = process.env.GITCREW_BUDGET_DIR
+    ? path.resolve(process.env.GITCREW_BUDGET_DIR)
+    : path.join(os.homedir(), ".gitcrew", "budget");
+  return path.join(globalDir, `${value}.json`);
 }

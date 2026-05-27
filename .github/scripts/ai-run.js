@@ -1,18 +1,27 @@
 #!/usr/bin/env node
 const { existsSync, readFileSync } = require("node:fs");
 const { spawnSync } = require("node:child_process");
+const os = require("node:os");
 const path = require("node:path");
 
 const args = parseArgs(process.argv.slice(2));
-const configPath = path.join(process.cwd(), ".agents", "memory", "ai-runners.json");
+const projectConfigPath = path.join(process.cwd(), ".agents", "memory", "ai-runners.json");
+const globalConfigPath = process.env.GITCREW_RUNNERS_FILE
+  ? path.resolve(process.env.GITCREW_RUNNERS_FILE)
+  : path.join(os.homedir(), ".gitcrew", "ai-runners.json");
 
-if (!existsSync(configPath)) {
-  console.error("AI runner config missing: " + configPath);
+if (!existsSync(projectConfigPath)) {
+  console.error("AI runner mapping missing: " + projectConfigPath);
   process.exit(1);
 }
 
-const config = JSON.parse(readFileSync(configPath, "utf8"));
-const runners = new Map((config.runners || []).map((runner) => [runner.id, runner]));
+const projectConfig = readJson(projectConfigPath);
+const globalConfig = existsSync(globalConfigPath) ? readJson(globalConfigPath) : {};
+const projectRunners = Array.isArray(projectConfig.runners) ? projectConfig.runners : [];
+const globalRunners = Array.isArray(globalConfig.runners) ? globalConfig.runners : [];
+const effectiveRunners = globalRunners.length ? globalRunners : projectRunners;
+const defaults = projectConfig.default_role_runners || globalConfig.default_role_runners || {};
+const runners = new Map(effectiveRunners.map((runner) => [runner.id, runner]));
 
 if (args.health) {
   const targets = args.all ? [...runners.keys()] : [requireRunnerId(args)];
@@ -20,20 +29,19 @@ if (args.health) {
     runHealthcheck(getRunner(id));
   }
   console.log(`AI runner health ok: ${targets.join(", ")}`);
-  process.exit(0);
+} else {
+  const runner = getRunner(requireRunnerId(args));
+  const prompt = args["prompt-file"]
+    ? readFileSync(args["prompt-file"], "utf8")
+    : String(args.prompt || "");
+
+  if (!prompt.trim()) {
+    console.error("--prompt-file or --prompt is required");
+    process.exit(2);
+  }
+
+  runInvocation(runner, prompt);
 }
-
-const runner = getRunner(requireRunnerId(args));
-const prompt = args["prompt-file"]
-  ? readFileSync(args["prompt-file"], "utf8")
-  : String(args.prompt || "");
-
-if (!prompt.trim()) {
-  console.error("--prompt-file or --prompt is required");
-  process.exit(2);
-}
-
-runInvocation(runner, prompt);
 
 function runInvocation(runner, prompt) {
   const command = runner.command;
@@ -70,12 +78,21 @@ function runHealthcheck(runner) {
 }
 
 function getRunner(id) {
-  const runner = runners.get(id);
+  const resolvedId = resolveRunnerId(id);
+  const runner = runners.get(resolvedId);
   if (!runner) {
-    console.error(`unknown AI runner: ${id}`);
+    const mapped = resolvedId !== id ? ` (mapped to ${resolvedId})` : "";
+    const known = [...runners.keys()].join(", ") || "(none)";
+    console.error(`unknown AI runner: ${id}${mapped}. configured runners: ${known}`);
     process.exit(2);
   }
   return runner;
+}
+
+function resolveRunnerId(id) {
+  if (runners.has(id)) return id;
+  if (defaults[id]) return String(defaults[id]);
+  return id;
 }
 
 function requireRunnerId(values) {
@@ -95,4 +112,13 @@ function parseArgs(argv) {
     }
   }
   return out;
+}
+
+function readJson(file) {
+  try {
+    return JSON.parse(readFileSync(file, "utf8"));
+  } catch (error) {
+    console.error("AI runner config cannot be read: " + file + ": " + error.message);
+    process.exit(1);
+  }
 }

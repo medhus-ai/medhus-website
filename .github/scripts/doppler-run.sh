@@ -7,9 +7,10 @@ if [[ "${1:-}" != "--" ]]; then
 fi
 shift
 
-token_file="${DOPPLER_SERVICE_TOKEN_FILE:-$HOME/.config/engineering-automation/doppler-service-token}"
-project="${DOPPLER_PROJECT:-engineering-automation}"
-config="${DOPPLER_CONFIG:-${GITHUB_REPOSITORY##*/}}"
+token_file="${DOPPLER_SERVICE_TOKEN_FILE:-$HOME/.config/gitcrew/doppler-service-token}"
+project="${DOPPLER_PROJECT:-gitcrew}"
+github_repository="${GITHUB_REPOSITORY:-}"
+config="${DOPPLER_CONFIG:-${github_repository##*/}}"
 
 if [[ -z "$config" ]]; then
   echo "DOPPLER_CONFIG is required when GITHUB_REPOSITORY is unavailable" >&2
