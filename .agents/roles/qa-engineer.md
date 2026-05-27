@@ -61,7 +61,7 @@ human's job and you must not claim otherwise.
 
 - Never edit production code. If a test is flaky because of the code,
   flag it; do not patch over it.
-- Never approve a PR. You report; reviewer + human decide.
+- Never approve a PR. You report; code-reviewer + human decide.
 - Never run destructive commands (drop database, delete branches, etc.)
   even in a test environment unless the test command explicitly does so
   by design.

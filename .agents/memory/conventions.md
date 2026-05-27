@@ -1,6 +1,6 @@
 ---
 purpose: project-wide coding rules and review checks every role must honor
-audience: every role (read-first), reviewer (enforce), planner (apply to rubric)
+audience: every role (read-first), code-reviewer (enforce), planner (apply to rubric)
 ---
 
 # Conventions

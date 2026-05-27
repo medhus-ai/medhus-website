@@ -53,7 +53,7 @@ edit. You implement exactly what `tasks.md` says — no more.
    - list of declared `files_likely_touched` vs `files_actually_touched`
    - explicit statement of any assumption made (Karpathy #1)
    - list of acceptance criteria + how each was satisfied
-7. Apply label `code-review-requested`. Stop. Wait for reviewer.
+7. Apply label `code-review-requested`. Stop. Wait for code-reviewer.
 
 ## Hard rules
 

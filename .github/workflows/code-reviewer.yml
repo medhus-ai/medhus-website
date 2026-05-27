@@ -1,4 +1,4 @@
-name: Reviewer
+name: Code Reviewer
 
 on:
   pull_request:
@@ -34,18 +34,18 @@ jobs:
             echo "should_review=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          gh pr comment "${{ github.event.pull_request.number }}" --body "Reviewer skipped: author is not allowlisted and PR is not labeled trusted-for-agent-review."
+          gh pr comment "${{ github.event.pull_request.number }}" --body "Code Reviewer skipped: author is not allowlisted and PR is not labeled trusted-for-agent-review."
           echo "should_review=false" >> "$GITHUB_OUTPUT"
         env:
           GH_TOKEN: ${{ github.token }}
 
       - name: Health check
         if: steps.trust.outputs.should_review == 'true'
-        run: ./.github/scripts/auth-check.sh --runner reviewer
+        run: ./.github/scripts/auth-check.sh --runner code-reviewer
 
       - name: Budget check
         if: steps.trust.outputs.should_review == 'true'
-        run: ./.github/scripts/budget-check.sh --pr "${{ github.event.pull_request.number }}" --workflow reviewer --runner reviewer
+        run: ./.github/scripts/budget-check.sh --pr "${{ github.event.pull_request.number }}" --workflow code-reviewer --runner code-reviewer
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -60,11 +60,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
-      - name: Reviewer pass
+      - name: Code Reviewer pass
         if: steps.trust.outputs.should_review == 'true'
         run: |
-          cat > "$RUNNER_TEMP/reviewer-prompt.txt" <<PROMPT
-          You are the Reviewer. You may only read repository files and GitHub metadata.
+          cat > "$RUNNER_TEMP/code-reviewer-prompt.txt" <<PROMPT
+          You are the Code Reviewer. Read .agents/roles/code-reviewer.md and follow it exactly.
+          You may only read repository files and GitHub metadata.
           Do not edit files, create commits, push branches, run project tests, install packages, or execute PR code.
 
           Read:
@@ -83,24 +84,24 @@ jobs:
             - add label human-review-needed
             - do not approve
 
-          Also create or update a check named reviewer-ai with success or failure.
+          Also create or update a check named code-reviewer-ai with success or failure.
           PROMPT
-          ./.github/scripts/ai-run.sh --runner reviewer --prompt-file "$RUNNER_TEMP/reviewer-prompt.txt"
+          ./.github/scripts/ai-run.sh --runner code-reviewer --prompt-file "$RUNNER_TEMP/code-reviewer-prompt.txt"
         env:
           GH_TOKEN: ${{ github.token }}
 
       - name: Record successful review budget
         if: success() && steps.trust.outputs.should_review == 'true'
-        run: ./.github/scripts/budget-record.sh --pr "${{ github.event.pull_request.number }}" --workflow reviewer --runner reviewer --result success --started-at "${{ steps.run_context.outputs.started_at }}"
+        run: ./.github/scripts/budget-record.sh --pr "${{ github.event.pull_request.number }}" --workflow code-reviewer --runner code-reviewer --result success --started-at "${{ steps.run_context.outputs.started_at }}"
         env:
           GITHUB_ACTOR: ${{ github.actor }}
 
       - name: Failure handling
         if: failure() && steps.trust.outputs.should_review == 'true'
         run: |
-          gh pr comment "${{ github.event.pull_request.number }}" --body "Reviewer workflow failed; see Actions logs."
+          gh pr comment "${{ github.event.pull_request.number }}" --body "Code Reviewer workflow failed; see Actions logs."
           gh pr edit "${{ github.event.pull_request.number }}" --add-label "blocked"
-          ./.github/scripts/budget-record.sh --pr "${{ github.event.pull_request.number }}" --workflow reviewer --runner reviewer --result failure --started-at "${{ steps.run_context.outputs.started_at }}" || true
+          ./.github/scripts/budget-record.sh --pr "${{ github.event.pull_request.number }}" --workflow code-reviewer --runner code-reviewer --result failure --started-at "${{ steps.run_context.outputs.started_at }}" || true
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_ACTOR: ${{ github.actor }}

@@ -23,10 +23,10 @@ jobs:
           fetch-depth: 1
 
       - name: Health check
-        run: ./.github/scripts/auth-check.sh --runner reviewer
+        run: ./.github/scripts/auth-check.sh --runner code-reviewer
 
       - name: Budget check
-        run: ./.github/scripts/budget-check.sh --issue "${{ github.event.issue.number }}" --workflow plan-review --runner reviewer
+        run: ./.github/scripts/budget-check.sh --issue "${{ github.event.issue.number }}" --workflow plan-review --runner code-reviewer
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -41,7 +41,7 @@ jobs:
 
       - name: Record success
         if: success()
-        run: ./.github/scripts/budget-record.sh --issue "${{ github.event.issue.number }}" --workflow plan-review --runner reviewer --result success --started-at "${{ steps.run_context.outputs.started_at }}"
+        run: ./.github/scripts/budget-record.sh --issue "${{ github.event.issue.number }}" --workflow plan-review --runner code-reviewer --result success --started-at "${{ steps.run_context.outputs.started_at }}"
         env:
           GITHUB_ACTOR: ${{ github.actor }}
 
@@ -53,4 +53,4 @@ jobs:
         run: |
           gh issue comment "${{ github.event.issue.number }}" --body "Plan-review workflow failed; see Actions logs."
           gh issue edit "${{ github.event.issue.number }}" --add-label "blocked"
-          ./.github/scripts/budget-record.sh --issue "${{ github.event.issue.number }}" --workflow plan-review --runner reviewer --result failure --started-at "${{ steps.run_context.outputs.started_at }}" || true
+          ./.github/scripts/budget-record.sh --issue "${{ github.event.issue.number }}" --workflow plan-review --runner code-reviewer --result failure --started-at "${{ steps.run_context.outputs.started_at }}" || true

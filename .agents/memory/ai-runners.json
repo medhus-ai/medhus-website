@@ -5,7 +5,7 @@
     "triager": "claude-sonnet-high",
     "coordinator": "claude-sonnet-high",
     "planner": "claude-sonnet-high",
-    "reviewer": "claude-sonnet-high",
+    "code-reviewer": "claude-sonnet-high",
     "qa-engineer": "claude-sonnet-high",
     "engineer": "claude-sonnet-high",
     "frontend-engineer": "claude-sonnet-high"

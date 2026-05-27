@@ -4,7 +4,7 @@ const { mkdtempSync, readFileSync, readdirSync, writeFileSync } = require("node:
 const os = require("node:os");
 const path = require("node:path");
 
-const ALWAYS_PRESENT = new Set(["triager", "coordinator", "planner", "reviewer", "qa-engineer", "engineer"]);
+const ALWAYS_PRESENT = new Set(["triager", "coordinator", "planner", "code-reviewer", "qa-engineer", "engineer"]);
 const PLAN_FILES = ["overview.md", "decisions.md", "architecture.md", "tasks.md", "tests.md", "risks.md"];
 
 const args = parseArgs(process.argv.slice(2));

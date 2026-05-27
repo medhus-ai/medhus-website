@@ -75,15 +75,15 @@ roles:
       - human-review-needed
       - blocked
 
-  - name: reviewer
+  - name: code-reviewer
     type: default
-    runner_id: reviewer
+    runner_id: code-reviewer
     model: configured-by-runner
-    system_prompt_path: .agents/roles/reviewer.md
-    workflow_path: .github/workflows/reviewer.yml.disabled
+    system_prompt_path: .agents/roles/code-reviewer.md
+    workflow_path: .github/workflows/code-reviewer.yml
     commit_identity:
-      name: "Reviewer (AI)"
-      email: "reviewer@bot.local"
+      name: "Code Reviewer (AI)"
+      email: "code-reviewer@bot.local"
     triggers:
       - pull_request:opened
       - pull_request:synchronize
@@ -101,7 +101,7 @@ roles:
 
   - name: qa-engineer
     type: default
-    runner_id: reviewer
+    runner_id: code-reviewer
     model: configured-by-runner
     system_prompt_path: .agents/roles/qa-engineer.md
     workflow_path: not-yet-generated

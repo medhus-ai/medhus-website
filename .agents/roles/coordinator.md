@@ -44,7 +44,7 @@ issue-opened
   → plan-approved              human said /approve
   → building                   engineer(s) active
   → build-coordinating         multiple PRs in flight
-  → code-review                reviewer + qa active per PR
+  → code-review                code-reviewer + qa active per PR
   → human-test                 awaiting human verification on merged feature
   → done                       closed
 ```
