@@ -7,7 +7,7 @@ roles:
     runner_id: coordinator
     model: configured-by-runner
     system_prompt_path: .agents/roles/triager.md
-    workflow_path: .github/workflows/triager.yml.disabled
+    workflow_path: .github/workflows/triager.yml
     commit_identity:
       name: "Triager (AI)"
       email: "triager@bot.local"
