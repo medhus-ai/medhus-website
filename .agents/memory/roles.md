@@ -7,7 +7,7 @@ roles:
     runner_id: crew-manager
     model: configured-by-runner
     system_prompt_path: .agents/roles/triager.md
-    workflow_path: .github/workflows/triager.yml
+    workflow_path: .github/workflows/triager.yml.disabled
     commit_identity:
       name: "Triager (AI)"
       email: "triager@bot.local"
@@ -31,7 +31,7 @@ roles:
     runner_id: crew-manager
     model: configured-by-runner
     system_prompt_path: .agents/roles/crew-manager.md
-    workflow_path: .github/workflows/crew-manager-build.yml
+    workflow_path: .github/workflows/crew-manager-build.yml.disabled
     commit_identity:
       name: "Crew Manager (AI)"
       email: "crew-manager@bot.local"
@@ -55,7 +55,7 @@ roles:
     runner_id: crew-manager
     model: configured-by-runner
     system_prompt_path: .agents/roles/planner.md
-    workflow_path: .github/workflows/plan-review.yml
+    workflow_path: .github/workflows/plan-review.yml.disabled
     commit_identity:
       name: "Planner (AI)"
       email: "planner@bot.local"
@@ -80,7 +80,7 @@ roles:
     runner_id: code-reviewer
     model: configured-by-runner
     system_prompt_path: .agents/roles/code-reviewer.md
-    workflow_path: .github/workflows/code-reviewer.yml
+    workflow_path: .github/workflows/code-reviewer.yml.disabled
     commit_identity:
       name: "Code Reviewer (AI)"
       email: "code-reviewer@bot.local"
@@ -125,7 +125,7 @@ roles:
     runner_id: engineer
     model: configured-by-runner
     system_prompt_path: .agents/roles/engineer.md
-    workflow_path: .github/workflows/engineer.yml
+    workflow_path: .github/workflows/engineer.yml.disabled
     commit_identity:
       name: "Engineer (AI)"
       email: "engineer@bot.local"
