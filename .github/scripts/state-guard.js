@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 const { readFileSync } = require("node:fs");
-const { execFileSync } = require("node:child_process");
+const { execFileSync, spawnSync } = require("node:child_process");
 
 const args = parseArgs(process.argv.slice(2));
-const activeLabels = String(args["active-labels"] || "needs-tag,triage-running,out-of-scope-recommended,needs-scope-decision,ready-to-plan,plan-drafting,plan-needs-clarify,plan-files-committed,plan-review-running,plan-needs-revision,plan-human-review,plan-approved,building,build-coordinating,code-review-requested,code-review-passed,human-test,human-review-needed,blocked,rate-limited,cost-cap-hit,done").split(",");
+const activeLabels = String(args["active-labels"] || "needs-tag,triage-running,out-of-scope-recommended,needs-scope-decision,ready-to-plan,plan-drafting,plan-needs-clarify,plan-files-committed,plan-review-running,plan-needs-revision,plan-user-review,plan-approved,building,build-coordinating,code-review-requested,code-review-passed,human-test,user-review-needed,blocked,rate-limited,cost-cap-hit,done").split(",");
 const target = args.issue || args.pr;
 
 if (!target || !args["expect-label"] || !args.actor || !args.allowlist) {
@@ -27,7 +27,7 @@ if (!labels.includes(args["expect-label"])) {
   failRemote(`expected trigger label missing: ${args["expect-label"]}`, false);
 }
 
-for (const pause of ["blocked", "human-review-needed", "cost-cap-hit"]) {
+for (const pause of ["blocked", "user-review-needed", "cost-cap-hit"]) {
   if (labels.includes(pause) && pause !== args["expect-label"]) {
     failRemote(`pause label present: ${pause}`, false);
   }
@@ -45,9 +45,25 @@ console.log("state guard ok");
 
 function fetchLabels() {
   const kind = args.issue ? "issue" : "pr";
-  const json = execFileSync("gh", [kind, "view", String(target), "--json", "labels"], { encoding: "utf8" });
-  const parsed = JSON.parse(json);
-  return (parsed.labels || []).map((label) => label.name);
+  const result = spawnSync("gh", [kind, "view", String(target), "--json", "labels"], {
+    encoding: "utf8",
+    env: process.env
+  });
+  if (result.status === 0) {
+    const parsed = JSON.parse(result.stdout);
+    return (parsed.labels || []).map((label) => label.name);
+  }
+  if (canUseApi()) {
+    const out = execFileSync(process.execPath, [
+      ".github/scripts/github-api.js",
+      "labels",
+      args.issue ? "--issue" : "--pr",
+      String(target)
+    ], { encoding: "utf8", env: process.env });
+    return out.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  }
+  if (result.error) throw result.error;
+  throw new Error(result.stderr?.trim() || "gh label lookup failed");
 }
 
 function readAllowlist(file) {
@@ -60,9 +76,9 @@ function readAllowlist(file) {
 function failRemote(message, invariant) {
   const kind = args.issue ? "issue" : "pr";
   try {
-    execFileSync("gh", [kind, "comment", String(target), "--body", `State guard failed: ${message}`], { stdio: "ignore" });
+    githubComment(kind, target, `State guard failed: ${message}`);
     if (invariant) {
-      execFileSync("gh", [kind, "edit", String(target), "--add-label", "human-review-needed"], { stdio: "ignore" });
+      githubLabel(kind, target, ["user-review-needed"], []);
     }
   } catch {
     // Surface original guard failure.
@@ -73,6 +89,39 @@ function failRemote(message, invariant) {
 function failLocal(message) {
   console.error(message);
   process.exit(1);
+}
+
+function githubComment(kind, number, body) {
+  const result = spawnSync("gh", [kind, "comment", String(number), "--body", body], { stdio: "ignore", env: process.env });
+  if (result.status === 0) return;
+  if (canUseApi()) {
+    execFileSync(process.execPath, [
+      ".github/scripts/github-api.js",
+      "comment",
+      kind === "issue" ? "--issue" : "--pr",
+      String(number),
+      "--body",
+      body
+    ], { stdio: "ignore", env: process.env });
+  }
+}
+
+function githubLabel(kind, number, add, remove) {
+  const ghArgs = [kind, "edit", String(number)];
+  for (const label of add) ghArgs.push("--add-label", label);
+  for (const label of remove) ghArgs.push("--remove-label", label);
+  const result = spawnSync("gh", ghArgs, { stdio: "ignore", env: process.env });
+  if (result.status === 0) return;
+  if (canUseApi()) {
+    const apiArgs = [".github/scripts/github-api.js", "label-edit", kind === "issue" ? "--issue" : "--pr", String(number)];
+    for (const label of add) apiArgs.push("--add-label", label);
+    for (const label of remove) apiArgs.push("--remove-label", label);
+    execFileSync(process.execPath, apiArgs, { stdio: "ignore", env: process.env });
+  }
+}
+
+function canUseApi() {
+  return Boolean(process.env.GH_TOKEN || process.env.GITHUB_TOKEN);
 }
 
 function parseArgs(argv) {

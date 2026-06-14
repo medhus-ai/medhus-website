@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 const { readFileSync, existsSync } = require("node:fs");
-const { execFileSync } = require("node:child_process");
+const { execFileSync, spawnSync } = require("node:child_process");
 const os = require("node:os");
 const path = require("node:path");
 
@@ -37,9 +37,12 @@ const body = [
   `- Provider-reconciled cost: ${cost ? "$" + cost.toFixed(4) : "not configured"}`
 ].join("\n");
 
-if (process.env.GH_TOKEN) {
+if (process.env.GH_TOKEN || process.env.GITHUB_TOKEN) {
   try {
-    execFileSync("gh", ["issue", "comment", String(target), "--body", body], { stdio: "ignore" });
+    const result = spawnSync("gh", ["issue", "comment", String(target), "--body", body], { stdio: "ignore", env: process.env });
+    if (result.status !== 0) {
+      execFileSync(process.execPath, [".github/scripts/github-api.js", "comment", "--issue", String(target), "--body", body], { stdio: "ignore", env: process.env });
+    }
   } catch {
     console.log(body);
   }

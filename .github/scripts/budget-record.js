@@ -7,7 +7,10 @@ const args = parseArgs(process.argv.slice(2));
 const now = new Date();
 const month = now.toISOString().slice(0, 7);
 const timestamp = now.toISOString();
-const startedAt = args["started-at"] ? new Date(args["started-at"]) : now;
+const startedAtValue = typeof args["started-at"] === "string" && args["started-at"].trim()
+  ? args["started-at"]
+  : null;
+const startedAt = startedAtValue ? new Date(startedAtValue) : now;
 const startedAtMs = Number.isNaN(startedAt.getTime()) ? now.getTime() : startedAt.getTime();
 const durationSeconds = Math.max(0, Math.round((now.getTime() - startedAtMs) / 1000));
 const budgetPath = resolveBudgetPath(month, { create: true });
@@ -19,9 +22,9 @@ if (!args.workflow || !args.result) {
 
 mkdirSync(path.dirname(budgetPath), { recursive: true });
 
-const budget = existsSync(budgetPath)
+const budget = normalizeBudget(month, existsSync(budgetPath)
   ? JSON.parse(readFileSync(budgetPath, "utf8"))
-  : defaultBudget(month);
+  : defaultBudget(month));
 
 const target = targetKey(args);
 const retryCount = retryCountForTarget(budget, target);
@@ -79,12 +82,24 @@ function defaultBudget(value) {
   };
 }
 
+function normalizeBudget(value, budget) {
+  const defaults = defaultBudget(value);
+  if (!budget || typeof budget !== "object") return defaults;
+  return {
+    ...defaults,
+    ...budget,
+    month: budget.month || defaults.month,
+    runs: Array.isArray(budget.runs) ? budget.runs : [],
+    rate_limits: Array.isArray(budget.rate_limits) ? budget.rate_limits : []
+  };
+}
+
 function parseArgs(argv) {
   const out = {};
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg.startsWith("--")) {
-      out[arg.slice(2)] = argv[i + 1] && !argv[i + 1].startsWith("--") ? argv[++i] : true;
+      out[arg.slice(2)] = argv[i + 1] !== undefined && !argv[i + 1].startsWith("--") ? argv[++i] : true;
     }
   }
   return out;

@@ -2,13 +2,12 @@
   "version": 1,
   "setup_note": "Project role runner mappings only. Configure concrete Codex, Claude, local model, or API-wrapper runner profiles globally in ~/.gitcrew/ai-runners.json.",
   "default_role_runners": {
-    "triager": "claude-sonnet-high",
-    "coordinator": "claude-sonnet-high",
-    "planner": "claude-sonnet-high",
-    "code-reviewer": "claude-sonnet-high",
-    "qa-engineer": "claude-sonnet-high",
-    "engineer": "claude-sonnet-high",
-    "frontend-engineer": "claude-sonnet-high"
-  },
-  "runners": []
+    "triager": "claude-agent-sonnet-high",
+    "crew-manager": "claude-agent-sonnet-high",
+    "planner": "claude-agent-sonnet-high",
+    "code-reviewer": "codex-agent-high",
+    "qa-engineer": "codex-agent-high",
+    "engineer": "claude-agent-sonnet-high",
+    "frontend-engineer": "engineer"
+  }
 }

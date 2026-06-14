@@ -4,7 +4,7 @@
 roles:
   - name: triager
     type: default
-    runner_id: coordinator
+    runner_id: crew-manager
     model: configured-by-runner
     system_prompt_path: .agents/roles/triager.md
     workflow_path: .github/workflows/triager.yml
@@ -23,18 +23,18 @@ roles:
       - issue labels
       - issue comments
     escalation_labels:
-      - human-review-needed
+      - user-review-needed
       - blocked
 
-  - name: coordinator
+  - name: crew-manager
     type: default
-    runner_id: coordinator
+    runner_id: crew-manager
     model: configured-by-runner
-    system_prompt_path: .agents/roles/coordinator.md
-    workflow_path: not-yet-generated
+    system_prompt_path: .agents/roles/crew-manager.md
+    workflow_path: .github/workflows/crew-manager-build.yml
     commit_identity:
-      name: "Coordinator (AI)"
-      email: "coordinator@bot.local"
+      name: "Crew Manager (AI)"
+      email: "crew-manager@bot.local"
     triggers:
       - label transitions
       - issue_comment:created
@@ -47,15 +47,15 @@ roles:
       - issue comments
       - .agents/log/YYYY-MM-DD.md
     escalation_labels:
-      - human-review-needed
+      - user-review-needed
       - blocked
 
   - name: planner
     type: default
-    runner_id: coordinator
+    runner_id: crew-manager
     model: configured-by-runner
     system_prompt_path: .agents/roles/planner.md
-    workflow_path: not-yet-generated
+    workflow_path: .github/workflows/plan-review.yml
     commit_identity:
       name: "Planner (AI)"
       email: "planner@bot.local"
@@ -72,7 +72,7 @@ roles:
       - .agents/plans/<issue-id>/*.md
       - issue comments (questions, status)
     escalation_labels:
-      - human-review-needed
+      - user-review-needed
       - blocked
 
   - name: code-reviewer
@@ -96,7 +96,7 @@ roles:
       - PR labels
       - checks
     escalation_labels:
-      - human-review-needed
+      - user-review-needed
       - blocked
 
   - name: qa-engineer
@@ -117,7 +117,7 @@ roles:
       - new test files
       - new issues for out-of-scope bugs found
     escalation_labels:
-      - human-review-needed
+      - user-review-needed
       - blocked
 
   - name: engineer
@@ -125,7 +125,7 @@ roles:
     runner_id: engineer
     model: configured-by-runner
     system_prompt_path: .agents/roles/engineer.md
-    workflow_path: not-yet-generated
+    workflow_path: .github/workflows/engineer.yml
     commit_identity:
       name: "Engineer (AI)"
       email: "engineer@bot.local"
@@ -139,7 +139,7 @@ roles:
       - commits (prefix [role:engineer])
       - pull requests
     escalation_labels:
-      - human-review-needed
+      - user-review-needed
       - blocked
 
   - name: frontend-engineer
@@ -163,6 +163,6 @@ roles:
       - PR review comments
       - plan-review scorecard comments
     escalation_labels:
-      - human-review-needed
+      - user-review-needed
       - blocked
 ```

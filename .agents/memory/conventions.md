@@ -46,6 +46,22 @@ These four failure modes must be actively guarded against:
    verifiable goals and tests. The plan must include success criteria a
    third party could check without asking questions.
 
+## Verification (a second model grades the first)
+
+AI can be confidently wrong, and it is worst at catching its own mistakes.
+Every plan and PR is checked against criteria set *before* the work began —
+the plan rubric, the task `acceptance` criteria, and `tests.md` — and by an
+independent signal, not by the same model re-reading its own output.
+
+- Prefer external signals: the test runner, linter, and CI report truth over
+  any narrative an agent (yours included) produces.
+- Prefer provider diversity: route the verifier roles (`code-reviewer`,
+  `qa-engineer`) to a *different* model provider than the builder roles
+  (`engineer` and specialists). A second opinion is most valuable when it
+  comes from a different model. This is a recommendation, never a hard gate —
+  `provider-diversity.js` and `gitcrew doctor` surface it as advice when every
+  role runs on one provider, or when only one provider is set up.
+
 ## What NOT to do
 
 - Do not write multi-paragraph docstrings or multi-line comment blocks.

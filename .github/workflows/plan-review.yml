@@ -51,6 +51,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GITHUB_ACTOR: ${{ github.actor }}
         run: |
-          gh issue comment "${{ github.event.issue.number }}" --body "Plan-review workflow failed; see Actions logs."
-          gh issue edit "${{ github.event.issue.number }}" --add-label "blocked"
+          node ./.github/scripts/github-api.js comment --issue "${{ github.event.issue.number }}" --body "Plan-review workflow failed; see Actions logs."
+          node ./.github/scripts/github-api.js label-edit --issue "${{ github.event.issue.number }}" --add-label "blocked"
           ./.github/scripts/budget-record.sh --issue "${{ github.event.issue.number }}" --workflow plan-review --runner code-reviewer --result failure --started-at "${{ steps.run_context.outputs.started_at }}" || true

@@ -33,10 +33,10 @@ jobs:
           fetch-depth: 0
 
       - name: Health check
-        run: ./.github/scripts/auth-check.sh --runner engineer
+        run: ./.github/scripts/auth-check.sh --runner "${{ github.event.inputs.engineer }}"
 
       - name: Budget check
-        run: ./.github/scripts/budget-check.sh --issue "${{ github.event.inputs.issue }}" --workflow engineer --runner engineer
+        run: ./.github/scripts/budget-check.sh --issue "${{ github.event.inputs.issue }}" --workflow engineer --runner "${{ github.event.inputs.engineer }}"
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -56,21 +56,20 @@ jobs:
           git config user.email "${ROLE}@bot.local"
           git checkout -b "$BRANCH"
           cat > "$RUNNER_TEMP/engineer-prompt.txt" <<PROMPT
-          You are the ${ROLE}. Read .agents/roles/${ROLE}.md and follow it exactly.
           Implement task ${TASK} from .agents/plans/${ISSUE}/tasks.md.
-          Read the plan files in .agents/plans/${ISSUE}/ and .agents/memory/conventions.md.
+          Read the plan files in .agents/plans/${ISSUE}/.
           Stay inside the task's files_likely_touched. Add the tests tests.md requires.
           Commit with prefix [role:${ROLE}]. Do not merge. Do not push to main.
           PROMPT
-          ./.github/scripts/ai-run.sh --runner engineer --prompt-file "$RUNNER_TEMP/engineer-prompt.txt"
+          ./.github/scripts/ai-run.sh --runner "$ROLE" --role "$ROLE" --prompt-file "$RUNNER_TEMP/engineer-prompt.txt"
           git push origin "$BRANCH"
-          gh pr create --title "[${TASK}] ${ROLE} for issue #${ISSUE}" \
+          node ./.github/scripts/github-api.js pr-create --title "[${TASK}] ${ROLE} for issue #${ISSUE}" \
             --body "Implements task ${TASK} of issue #${ISSUE}. See .agents/plans/${ISSUE}/tasks.md." \
-            --label "task:${TASK}" --label "issue:${ISSUE}" --label "code-review-requested" || true
+            --head "$BRANCH" --label "task:${TASK}" --label "issue:${ISSUE}" --label "code-review-requested" || true
 
       - name: Record success
         if: success()
-        run: ./.github/scripts/budget-record.sh --issue "${{ github.event.inputs.issue }}" --workflow engineer --runner engineer --result success --started-at "${{ steps.run_context.outputs.started_at }}"
+        run: ./.github/scripts/budget-record.sh --issue "${{ github.event.inputs.issue }}" --workflow engineer --runner "${{ github.event.inputs.engineer }}" --result success --started-at "${{ steps.run_context.outputs.started_at }}"
         env:
           GITHUB_ACTOR: ${{ github.actor }}
 
@@ -80,6 +79,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GITHUB_ACTOR: ${{ github.actor }}
         run: |
-          gh issue comment "${{ github.event.inputs.issue }}" --body "Engineer workflow for task ${{ github.event.inputs.task }} failed; see Actions logs."
-          gh issue edit "${{ github.event.inputs.issue }}" --add-label "blocked"
-          ./.github/scripts/budget-record.sh --issue "${{ github.event.inputs.issue }}" --workflow engineer --runner engineer --result failure --started-at "${{ steps.run_context.outputs.started_at }}" || true
+          node ./.github/scripts/github-api.js comment --issue "${{ github.event.inputs.issue }}" --body "Engineer workflow for task ${{ github.event.inputs.task }} failed; see Actions logs."
+          node ./.github/scripts/github-api.js label-edit --issue "${{ github.event.inputs.issue }}" --add-label "blocked"
+          ./.github/scripts/budget-record.sh --issue "${{ github.event.inputs.issue }}" --workflow engineer --runner "${{ github.event.inputs.engineer }}" --result failure --started-at "${{ steps.run_context.outputs.started_at }}" || true

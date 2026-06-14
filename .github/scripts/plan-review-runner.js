@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 const { execFileSync, spawnSync } = require("node:child_process");
-const { mkdtempSync, readFileSync, readdirSync, writeFileSync } = require("node:fs");
+const { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 
-const ALWAYS_PRESENT = new Set(["triager", "coordinator", "planner", "code-reviewer", "qa-engineer", "engineer"]);
+const ALWAYS_PRESENT = new Set(["triager", "crew-manager", "planner", "code-reviewer", "qa-engineer", "engineer"]);
 const PLAN_FILES = ["overview.md", "decisions.md", "architecture.md", "tasks.md", "tests.md", "risks.md"];
 
 const args = parseArgs(process.argv.slice(2));
@@ -16,9 +16,9 @@ if (!existsPath(planDir)) usage(`plan dir ${planDir} not found`);
 
 const specialists = listSpecialists();
 if (specialists.length === 0) {
-  postComment(issue, "Plan review: no specialists installed; transitioning to human review.");
-  transitionLabel(issue, "plan-files-committed", "plan-human-review");
-  transitionLabel(issue, "plan-needs-revision", "plan-human-review");
+  postComment(issue, "Plan review: no specialists installed; transitioning to user review.");
+  transitionLabel(issue, "plan-files-committed", "plan-user-review");
+  transitionLabel(issue, "plan-needs-revision", "plan-user-review");
   process.exit(0);
 }
 
@@ -38,13 +38,13 @@ const summary = buildAggregateComment(scorecards, rubric, verdict, passNumber);
 postComment(issue, summary);
 
 if (verdict.pass) {
-  transitionLabel(issue, "plan-files-committed", "plan-human-review");
-  transitionLabel(issue, "plan-needs-revision", "plan-human-review");
+  transitionLabel(issue, "plan-files-committed", "plan-user-review");
+  transitionLabel(issue, "plan-needs-revision", "plan-user-review");
 } else if (passNumber < 2) {
   transitionLabel(issue, "plan-files-committed", "plan-needs-revision");
 } else {
-  transitionLabel(issue, "plan-needs-revision", "plan-human-review");
-  transitionLabel(issue, "plan-files-committed", "plan-human-review");
+  transitionLabel(issue, "plan-needs-revision", "plan-user-review");
+  transitionLabel(issue, "plan-files-committed", "plan-user-review");
 }
 
 function listSpecialists() {
@@ -83,37 +83,33 @@ function buildPlanContext(planDir) {
 }
 
 function runSpecialist(role, planContext, rubric) {
-  const rolePrompt = readMaybe(`.agents/roles/${role}.md`) || "(role file missing)";
-  const conventions = readMaybe(".agents/memory/conventions.md") || "(conventions missing)";
+  // ai-run.js --role injects the Role / Conventions / Project scope preamble;
+  // this prompt only adds the rubric, the plan, and the scorecard instruction.
   const rubricBody = readMaybe(".agents/plan-rubric.md") || "(rubric missing)";
   const promptBody = [
-    `You are the ${role}. Read your role file, then rate the plan below on every metric in the rubric.`,
-    "",
-    "## Role", rolePrompt,
-    "",
-    "## Conventions", conventions,
+    "Rate the plan below on every metric in the rubric, then post one scorecard in the format defined in plan-rubric.md (### Plan scorecard \u2014 <role>, table of Metric/Score/Justification, then P0 blockers / Required changes / Optional notes). Do NOT call gh yourself; just print the scorecard markdown to stdout.",
     "",
     "## Rubric", rubricBody,
     "",
-    "## Plan", planContext,
-    "",
-    "## Your task",
-    "Post one scorecard in the format defined in plan-rubric.md (### Plan scorecard \u2014 <role>, table of Metric/Score/Justification, then P0 blockers / Required changes / Optional notes).",
-    "Do NOT call gh yourself; just print the scorecard markdown to stdout."
+    "## Plan", planContext
   ].join("\n");
   const tmpDir = mkdtempSync(path.join(os.tmpdir(), "plan-review-"));
-  const promptFile = path.join(tmpDir, `prompt-${role}.txt`);
-  writeFileSync(promptFile, promptBody, "utf8");
-  const runner = inferRunner(role);
-  const result = spawnSync("bash", [".github/scripts/ai-run.sh", "--runner", runner, "--prompt-file", promptFile], {
-    encoding: "utf8",
-    env: process.env,
-    maxBuffer: 16 * 1024 * 1024
-  });
-  if (result.status !== 0) {
-    return { role, output: `### Plan scorecard \u2014 ${role}\n\nRunner failed (exit ${result.status}). stderr:\n\n${result.stderr || "(none)"}` };
+  try {
+    const promptFile = path.join(tmpDir, `prompt-${role}.txt`);
+    writeFileSync(promptFile, promptBody, "utf8");
+    const runner = inferRunner(role);
+    const result = spawnSync("bash", [".github/scripts/ai-run.sh", "--runner", runner, "--role", role, "--prompt-file", promptFile], {
+      encoding: "utf8",
+      env: process.env,
+      maxBuffer: 16 * 1024 * 1024
+    });
+    if (result.status !== 0) {
+      return { role, output: `### Plan scorecard \u2014 ${role}\n\nRunner failed (exit ${result.status}). stderr:\n\n${result.stderr || "(none)"}` };
+    }
+    return { role, output: result.stdout?.trim() || `### Plan scorecard \u2014 ${role}\n\n(no output)` };
+  } finally {
+    try { rmSync(tmpDir, { recursive: true, force: true }); } catch { /* best effort */ }
   }
-  return { role, output: result.stdout?.trim() || `### Plan scorecard \u2014 ${role}\n\n(no output)` };
 }
 
 function inferRunner(role) {
@@ -171,29 +167,68 @@ function buildAggregateComment(scorecards, rubric, verdict, passNumber) {
   lines.push("");
   lines.push(`**Specialists rated:** ${scorecards.map((c) => c.role).join(", ") || "(none)"}`);
   if (verdict.pass) {
-    lines.push("**Gate:** pass. Transitioning to plan-human-review.");
+    lines.push("**Gate:** pass. Transitioning to plan-user-review.");
   } else if (passNumber < 2) {
     lines.push("**Gate:** fail on pass 1. Transitioning to plan-needs-revision (planner gets ONE revision).");
   } else {
-    lines.push("**Gate:** still failing on pass 2. Transitioning to plan-human-review regardless (one-revision rule).");
+    lines.push("**Gate:** still failing on pass 2. Transitioning to plan-user-review regardless (one-revision rule).");
   }
   return lines.join("\n");
 }
 
 function countPriorPasses(issue) {
   try {
-    const out = execFileSync("gh", ["issue", "view", String(issue), "--json", "comments"], { encoding: "utf8" });
-    const data = JSON.parse(out);
+    const data = readIssueComments(issue);
     return (data.comments || []).filter((c) => /### Plan review aggregate \(pass \d+\)/.test(c.body || "")).length;
   } catch { return 0; }
 }
 
+function readIssueComments(issue) {
+  const gh = spawnSync("gh", ["issue", "view", String(issue), "--json", "comments"], {
+    encoding: "utf8",
+    env: process.env
+  });
+  if (gh.status === 0) return JSON.parse(gh.stdout);
+  if (canUseApi()) {
+    const out = execFileSync(process.execPath, [".github/scripts/github-api.js", "comments", "--issue", String(issue)], {
+      encoding: "utf8",
+      env: process.env
+    });
+    return JSON.parse(out);
+  }
+  if (gh.error) throw gh.error;
+  throw new Error(gh.stderr?.trim() || "gh issue comments failed");
+}
+
 function postComment(issue, body) {
-  spawnSync("gh", ["issue", "comment", String(issue), "--body", body], { encoding: "utf8", env: process.env });
+  githubComment("issue", issue, body);
 }
 
 function transitionLabel(issue, removeLabel, addLabel) {
-  spawnSync("gh", ["issue", "edit", String(issue), "--remove-label", removeLabel, "--add-label", addLabel], { encoding: "utf8", env: process.env });
+  githubLabel("issue", issue, [addLabel], [removeLabel]);
+}
+
+function githubComment(kind, number, body) {
+  const gh = spawnSync("gh", [kind, "comment", String(number), "--body", body], { encoding: "utf8", env: process.env });
+  if (gh.status === 0 || !canUseApi()) return gh;
+  const apiArgs = [".github/scripts/github-api.js", "comment", `--${kind}`, String(number), "--body", body];
+  return spawnSync(process.execPath, apiArgs, { encoding: "utf8", env: process.env });
+}
+
+function githubLabel(kind, number, addLabels, removeLabels) {
+  const ghArgs = [kind, "edit", String(number)];
+  for (const label of removeLabels.filter(Boolean)) ghArgs.push("--remove-label", label);
+  for (const label of addLabels.filter(Boolean)) ghArgs.push("--add-label", label);
+  const gh = spawnSync("gh", ghArgs, { encoding: "utf8", env: process.env });
+  if (gh.status === 0 || !canUseApi()) return gh;
+  const apiArgs = [".github/scripts/github-api.js", "label-edit", `--${kind}`, String(number)];
+  for (const label of removeLabels.filter(Boolean)) apiArgs.push("--remove-label", label);
+  for (const label of addLabels.filter(Boolean)) apiArgs.push("--add-label", label);
+  return spawnSync(process.execPath, apiArgs, { encoding: "utf8", env: process.env });
+}
+
+function canUseApi() {
+  return Boolean(process.env.GH_TOKEN || process.env.GITHUB_TOKEN);
 }
 
 function readMaybe(file) {

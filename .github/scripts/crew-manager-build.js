@@ -3,7 +3,7 @@ const { execFileSync, spawnSync } = require("node:child_process");
 const { readFileSync } = require("node:fs");
 const path = require("node:path");
 
-// Cross-PR build coordinator. On every invocation for an issue it:
+// Cross-PR crew-manager build pass. On every invocation for an issue it:
 //   1. parses .agents/plans/<issue>/tasks.md
 //   2. classifies tasks via task:<id> labels on PRs (merged = done, open = in-flight)
 //   3. dispatches ready + undispatched tasks to engineer.yml
@@ -32,7 +32,7 @@ const dispatchable = ready.filter((t) => !openPRsByTask.has(t.id));
 
 for (const t of dispatchable) {
   dispatchEngineer(issue, t.id, t.engineer || "engineer");
-  comment(issue, `Build coordinator: dispatched task ${t.id} to ${t.engineer || "engineer"}.`);
+  comment(issue, `Crew Manager build: dispatched task ${t.id} to ${t.engineer || "engineer"}.`);
 }
 
 flagOpenPRConflicts(tasks, openPRsByTask, issue);
@@ -41,9 +41,9 @@ const allDone = tasks.every((t) => doneIds.has(t.id));
 if (allDone) {
   transition(issue, "build-coordinating", "human-test");
   transition(issue, "building", "human-test");
-  comment(issue, "Build coordinator: all task PRs merged. Moving to human-test.");
+  comment(issue, "Crew Manager build: all task PRs merged. Moving to human-test.");
 } else if (dispatchable.length === 0 && openPRsByTask.size === 0) {
-  comment(issue, "Build coordinator: no tasks ready to dispatch and none in flight. Check dependency graph.");
+  comment(issue, "Crew Manager build: no tasks ready to dispatch and none in flight. Check dependency graph.");
 }
 
 function flagOpenPRConflicts(tasks, openPRsByTask, issue) {
@@ -60,11 +60,11 @@ function flagOpenPRConflicts(tasks, openPRsByTask, issue) {
       if (shared.length > 0) {
         for (const pr of [prA, prB]) {
           if (!flagged.has(pr.number)) {
-            spawnSync("gh", ["pr", "edit", String(pr.number), "--add-label", "file-conflict-pending"], { encoding: "utf8", env: process.env });
+            githubLabel("pr", pr.number, ["file-conflict-pending"], []);
             flagged.add(pr.number);
           }
         }
-        comment(issue, `Build coordinator: PRs #${prA.number} and #${prB.number} touch overlapping files (${shared.join(", ")}). Merge one before the other.`);
+        comment(issue, `Crew Manager build: PRs #${prA.number} and #${prB.number} touch overlapping files (${shared.join(", ")}). Merge one before the other.`);
       }
     }
   }
@@ -77,8 +77,7 @@ function declaredFiles(task) {
 
 function listIssueTaskPRs(issue) {
   try {
-    const out = execFileSync("gh", ["pr", "list", "--state", "all", "--json", "number,state,labels,files", "--limit", "200"], { encoding: "utf8" });
-    const data = JSON.parse(out);
+    const data = listPullRequests();
     return data
       .map((p) => ({
         number: p.number,
@@ -93,16 +92,66 @@ function listIssueTaskPRs(issue) {
   }
 }
 
+function listPullRequests() {
+  const gh = spawnSync("gh", ["pr", "list", "--state", "all", "--json", "number,state,labels,files", "--limit", "200"], {
+    encoding: "utf8",
+    env: process.env
+  });
+  if (gh.status === 0) return JSON.parse(gh.stdout);
+  if (canUseApi()) {
+    const out = execFileSync(process.execPath, [".github/scripts/github-api.js", "pr-list", "--state", "all", "--limit", "200"], {
+      encoding: "utf8",
+      env: process.env
+    });
+    return JSON.parse(out);
+  }
+  if (gh.error) throw gh.error;
+  throw new Error(gh.stderr?.trim() || "gh pr list failed");
+}
+
 function dispatchEngineer(issue, taskId, engineer) {
-  spawnSync("gh", ["workflow", "run", "engineer.yml", "-f", `issue=${issue}`, "-f", `task=${taskId}`, "-f", `engineer=${engineer}`], { encoding: "utf8", env: process.env });
+  githubWorkflowRun("engineer.yml", [`issue=${issue}`, `task=${taskId}`, `engineer=${engineer}`]);
 }
 
 function comment(issue, body) {
-  spawnSync("gh", ["issue", "comment", String(issue), "--body", body], { encoding: "utf8", env: process.env });
+  githubComment("issue", issue, body);
 }
 
 function transition(issue, removeLabel, addLabel) {
-  spawnSync("gh", ["issue", "edit", String(issue), "--remove-label", removeLabel, "--add-label", addLabel], { encoding: "utf8", env: process.env });
+  githubLabel("issue", issue, [addLabel], [removeLabel]);
+}
+
+function githubWorkflowRun(workflow, fields) {
+  const ghArgs = ["workflow", "run", workflow];
+  for (const field of fields) ghArgs.push("-f", field);
+  const gh = spawnSync("gh", ghArgs, { encoding: "utf8", env: process.env });
+  if (gh.status === 0 || !canUseApi()) return gh;
+  const apiArgs = [".github/scripts/github-api.js", "workflow-run", "--workflow", workflow];
+  for (const field of fields) apiArgs.push("--f", field);
+  return spawnSync(process.execPath, apiArgs, { encoding: "utf8", env: process.env });
+}
+
+function githubComment(kind, number, body) {
+  const gh = spawnSync("gh", [kind, "comment", String(number), "--body", body], { encoding: "utf8", env: process.env });
+  if (gh.status === 0 || !canUseApi()) return gh;
+  const apiArgs = [".github/scripts/github-api.js", "comment", `--${kind}`, String(number), "--body", body];
+  return spawnSync(process.execPath, apiArgs, { encoding: "utf8", env: process.env });
+}
+
+function githubLabel(kind, number, addLabels, removeLabels) {
+  const ghArgs = [kind, "edit", String(number)];
+  for (const label of removeLabels.filter(Boolean)) ghArgs.push("--remove-label", label);
+  for (const label of addLabels.filter(Boolean)) ghArgs.push("--add-label", label);
+  const gh = spawnSync("gh", ghArgs, { encoding: "utf8", env: process.env });
+  if (gh.status === 0 || !canUseApi()) return gh;
+  const apiArgs = [".github/scripts/github-api.js", "label-edit", `--${kind}`, String(number)];
+  for (const label of removeLabels.filter(Boolean)) apiArgs.push("--remove-label", label);
+  for (const label of addLabels.filter(Boolean)) apiArgs.push("--add-label", label);
+  return spawnSync(process.execPath, apiArgs, { encoding: "utf8", env: process.env });
+}
+
+function canUseApi() {
+  return Boolean(process.env.GH_TOKEN || process.env.GITHUB_TOKEN);
 }
 
 function parseTasks(md) {
@@ -168,7 +217,7 @@ function stripInlineComment(line) {
 }
 
 function usage(msg) {
-  console.error(`build-coordinator.js: ${msg}`);
-  console.error("usage: build-coordinator.js --issue <id>");
+  console.error(`crew-manager-build.js: ${msg}`);
+  console.error("usage: crew-manager-build.js --issue <id>");
   process.exit(2);
 }

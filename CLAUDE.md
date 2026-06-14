@@ -12,7 +12,7 @@ Project brief for this repo.
 
 This repo uses embedded engineering automation.
 
-- Always-present roles: triager, coordinator, planner, code-reviewer, qa-engineer, engineer
+- Always-present roles: triager, crew-manager, planner, code-reviewer, qa-engineer, engineer
 - Specialists installed on demand: frontend-engineer, ml-engineer, container-engineer, security-engineer, or any cloned from the specialist-engineer template
 - Required type tag on every issue: feature / bug / chore / docs / question / proposal
 - Machine secrets and keys: Doppler
@@ -26,5 +26,5 @@ This repo uses embedded engineering automation.
 - .agents/memory/conventions.md
 - .agents/memory/project-scope.md
 - .agents/roles/triager.md
-- .agents/roles/coordinator.md
+- .agents/roles/crew-manager.md
 - .agents/roles/code-reviewer.md

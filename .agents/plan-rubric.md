@@ -1,13 +1,13 @@
 ---
 purpose: the rubric every installed specialist uses to score a plan
-audience: planner (apply), specialists (score), coordinator (aggregate + gate)
+audience: planner (apply), specialists (score), crew-manager (aggregate + gate)
 edit: humans add/remove metrics, change thresholds, change which roles rate which metric
 ---
 
 # Plan Rubric
 
 Each specialist installed in the project scores every metric 0–10 and posts
-a scorecard comment with a one-line justification per metric. The coordinator
+a scorecard comment with a one-line justification per metric. The crew-manager
 aggregates and gates the plan-review state machine.
 
 ## Gate rule

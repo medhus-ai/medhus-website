@@ -1,4 +1,4 @@
-name: Build Coordinator
+name: Crew Manager Build
 
 on:
   issues:
@@ -12,11 +12,11 @@ permissions:
   contents: read
 
 jobs:
-  coordinate:
+  manage-build:
     if: ${{ (github.event_name == 'issues' && github.event.label.name == 'plan-approved') || github.event_name == 'pull_request' }}
     runs-on: [self-hosted, "project-medhus-website"]
     concurrency:
-      group: build-coordinator-${{ github.event.issue.number || github.event.pull_request.number }}
+      group: crew-manager-build-${{ github.event.issue.number || github.event.pull_request.number }}
       cancel-in-progress: false
     steps:
       - name: Checkout trusted base
@@ -33,12 +33,12 @@ jobs:
           if [ "${{ github.event_name }}" = "issues" ]; then
             echo "issue=${{ github.event.issue.number }}" >> "$GITHUB_OUTPUT"
           else
-            ISSUE=$(gh pr view "${{ github.event.pull_request.number }}" --json labels --jq '.labels[].name' | sed -n 's/^issue:\([0-9][0-9]*\)$/\1/p' | head -n1)
+            ISSUE=$(node ./.github/scripts/github-api.js labels --pr "${{ github.event.pull_request.number }}" | sed -n 's/^issue:\([0-9][0-9]*\)$/\1/p' | head -n1)
             echo "issue=$ISSUE" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Coordinate build
+      - name: Crew Manager build pass
         if: steps.resolve.outputs.issue != ''
         env:
           GH_TOKEN: ${{ github.token }}
-        run: node ./.github/scripts/build-coordinator.js --issue "${{ steps.resolve.outputs.issue }}"
+        run: node ./.github/scripts/crew-manager-build.js --issue "${{ steps.resolve.outputs.issue }}"

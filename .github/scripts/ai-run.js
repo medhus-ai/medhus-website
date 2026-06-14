@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-const { existsSync, readFileSync } = require("node:fs");
+const { existsSync, readFileSync, writeFileSync } = require("node:fs");
 const { spawnSync } = require("node:child_process");
 const os = require("node:os");
 const path = require("node:path");
@@ -30,17 +30,47 @@ if (args.health) {
   }
   console.log(`AI runner health ok: ${targets.join(", ")}`);
 } else {
-  const runner = getRunner(requireRunnerId(args));
-  const prompt = args["prompt-file"]
+  const task = args["prompt-file"]
     ? readFileSync(args["prompt-file"], "utf8")
     : String(args.prompt || "");
 
-  if (!prompt.trim()) {
+  if (!task.trim()) {
     console.error("--prompt-file or --prompt is required");
     process.exit(2);
   }
 
-  runInvocation(runner, prompt);
+  // With --role, prepend the same Role / Conventions / Project scope preamble
+  // the cockpit inlines, so a CI agent always gets that context inline rather
+  // than being asked to go read the files. Without --role, the prompt is sent
+  // verbatim (callers that build their own full prompt, e.g. plan-review).
+  const prompt = args.role ? withContextPreamble(String(args.role), task) : task;
+
+  if (args["print-prompt"]) {
+    writeFileSync(1, prompt);
+  } else {
+    runInvocation(getRunner(requireRunnerId(args)), prompt);
+  }
+}
+
+function withContextPreamble(role, task) {
+  const readMaybe = (file, missing) => {
+    try { return readFileSync(file, "utf8").trim(); } catch { return missing; }
+  };
+  return [
+    `You are the ${role} for this project. Follow the role file below exactly.`,
+    "",
+    "## Role",
+    readMaybe(path.join(".agents", "roles", `${role}.md`), "(role file missing)"),
+    "",
+    "## Coding conventions",
+    readMaybe(path.join(".agents", "memory", "conventions.md"), "(conventions missing)"),
+    "",
+    "## Project scope",
+    readMaybe(path.join(".agents", "memory", "project-scope.md"), "(scope missing)"),
+    "",
+    "## Your task",
+    task.trim()
+  ].join("\n");
 }
 
 function runInvocation(runner, prompt) {
@@ -90,9 +120,34 @@ function getRunner(id) {
 }
 
 function resolveRunnerId(id) {
-  if (runners.has(id)) return id;
-  if (defaults[id]) return String(defaults[id]);
+  const configured = resolveConfiguredRunnerId(id);
+  if (configured) return configured;
+  const frontmatterRunner = readRoleRunnerId(id);
+  if (frontmatterRunner && frontmatterRunner !== "default") {
+    return resolveConfiguredRunnerId(frontmatterRunner) || frontmatterRunner;
+  }
   return id;
+}
+
+function resolveConfiguredRunnerId(id) {
+  let current = String(id || "");
+  const seen = new Set();
+  while (current && !seen.has(current)) {
+    if (runners.has(current)) return current;
+    seen.add(current);
+    current = defaults[current] ? String(defaults[current]) : "";
+  }
+  return "";
+}
+
+function readRoleRunnerId(role) {
+  try {
+    const text = readFileSync(path.join(".agents", "roles", `${role}.md`), "utf8");
+    const match = text.match(/^runner_id:\s*(\S+)/m);
+    return match ? match[1] : "";
+  } catch {
+    return "";
+  }
 }
 
 function requireRunnerId(values) {
